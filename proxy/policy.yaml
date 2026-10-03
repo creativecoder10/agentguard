@@ -1,0 +1,19 @@
+# AgentGuard policy — the allowlist + sandbox rules PolicyMiddleware enforces
+# on every tool call. Edit this file to change what the proxied agent can do;
+# no code change needed for a policy change.
+
+sandbox_root: "./sandbox"
+
+tools:
+  read_file:
+    risk: read
+  write_file:
+    risk: write
+  delete_file:
+    risk: destructive # hard-denied in Phase 1 — see docs/PRD.md
+
+blocked_extensions:
+  - .env
+  - .pem
+  - .key
+  - .p12

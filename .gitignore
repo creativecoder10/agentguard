@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+proxy/sandbox/
+proxy/audit.log
+.DS_Store
