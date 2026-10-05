@@ -189,8 +189,13 @@ of trying harder to recognise bad data (Meta's "Agents Rule of Two").
 
 ## Phase 3 — Monitoring & rate limiting — not started
 
-- [ ] Small script (or reuse the vigilant-engine dashboard pattern) to read
-      `audit.log` and show: calls over time, DENY rate, most-denied tool
+- [x] Public attack-report page (`dashboard/`): `harness/build_dashboard_data.py`
+      runs 4 scripted scenarios through the real proxy and writes the real
+      audit entries + on-disk outcome checks to `runs.json`; static
+      `index.html` renders it (results tiles, per-scenario timelines,
+      defence × scenario matrix, stated limits). Hosted on Vercel
+- [ ] Live view over a running proxy's `audit.log`: calls over time, DENY
+      rate, most-denied tool
 - [ ] Per-session rate limit / circuit breaker (N calls per minute, then
       hard-stop) — answers the STRIDE "D" (denial of service) row currently
       marked deferred in `docs/THREAT_MODEL.md`

@@ -182,7 +182,7 @@ Full task-level checklist: [Plan_agentguard.md](../Plan_agentguard.md).
 | 1b — Reference harness & output-side scanning | Hand-written agent loop on the Claude API driving AgentGuard over MCP; tool-result secret redaction + injection flag/block; scripted + live injection demo; 30 passing tests | **Shipped** |
 | 2a — Session taint & task-scoped writes | Untrusted read (by source or injection signal) taints the session → write/destructive denied; per-task `writable_paths` | **Shipped** |
 | 2b — Human-in-the-loop approval | Turn the hard denies (destructive, tainted-session writes) into an interactive approval gate (terminal prompt for MVP) | **Not started** |
-| 3 — Monitoring & rate limiting | Simple dashboard over `audit.log`, rate limit / circuit breaker per session | **Not started** |
+| 3 — Monitoring & rate limiting | Simple dashboard over `audit.log`, rate limit / circuit breaker per session | **Started** — public attack-report page (`dashboard/`) built from real scenario runs; live audit view and rate limiting not started |
 | 4 — Scoped credentials | Issue short-lived, scoped credentials per tool call (e.g. AWS STS) instead of trusting a static key | **Not started** |
 | 5 — Prompt-injection test harness | Adversarial test suite proving the gate holds under a simulated injection attempt, TenantGuard-style | **Not started** — first scenario (poisoned file, fully hijacked model) delivered in 1b |
 | 6 — Package as shippable product | pip/Docker packaging, config generator for `.mcp.json`/Cursor, self-scan with Semgrep/gitleaks in CI | **Not started** |

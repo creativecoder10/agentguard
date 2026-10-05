@@ -80,6 +80,20 @@ Scripted run, abridged:
 The model obeyed the injection completely and still couldn't do damage —
 that's the point: the boundary is the gate, not the model's judgment.
 
+## Attack report page (`dashboard/`)
+
+A static, recruiter-friendly page showing four attack scenarios run through
+the real proxy — every step is a real `audit.log` entry, every outcome check
+looks at the real sandbox after the run.
+
+```bash
+cd harness && ../.venv/bin/python build_dashboard_data.py   # re-run scenarios → dashboard/runs.json
+python3 -m http.server -d dashboard                          # preview at http://localhost:8000
+```
+
+Deploy on Vercel: import the repo, set **Root Directory** to `dashboard`,
+Framework Preset **Other**, no build command. It's plain HTML + one JSON file.
+
 ## Wiring into Claude Code
 
 Add to your project's `.mcp.json`:

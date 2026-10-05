@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentGuard Attack Report</title>
+<meta name="description" content="AgentGuard — a security gate for AI coding agents. Four attack scenarios run through the real proxy, every decision from its audit log.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 4 7v8c0 7.5 5.1 13.4 12 15 6.9-1.6 12-7.5 12-15V7z' fill='%232a78d6'/><path d='m10.5 16 4 4 7-8' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --surface-2: #f3f2ee;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #6f6e69;
+  --hairline: rgba(11, 11, 11, 0.10);
+  --grid: #e1e0d9;
+  --accent: #2a78d6;
+  --accent-ink: #1c5cab;
+  --good: #0ca30c;
+  --good-ink: #006300;
+  --critical: #d03b3b;
+  --critical-ink: #b42f2f;
+  --warning: #fab219;
+  --code-bg: #f0efec;
+  --shadow: 0 1px 2px rgba(11, 11, 11, 0.04), 0 4px 16px rgba(11, 11, 11, 0.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #232321;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #9a9890;
+    --hairline: rgba(255, 255, 255, 0.10);
+    --grid: #2c2c2a;
+    --accent: #3987e5;
+    --accent-ink: #86b6ef;
+    --good-ink: #3fc93f;
+    --critical-ink: #f08080;
+    --code-bg: #232321;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-2: #232321;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #9a9890;
+  --hairline: rgba(255, 255, 255, 0.10);
+  --grid: #2c2c2a;
+  --accent: #3987e5;
+  --accent-ink: #86b6ef;
+  --good-ink: #3fc93f;
+  --critical-ink: #f08080;
+  --code-bg: #232321;
+  --shadow: none;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+a { color: var(--accent-ink); text-underline-offset: 2px; }
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.86em; }
+code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; overflow-wrap: anywhere; }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+section { padding: 40px 0; border-top: 1px solid var(--hairline); }
+h1, h2, h3 { line-height: 1.2; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; }
+h3 { font-size: 1.08rem; }
+.section-lede { color: var(--ink-2); max-width: 68ch; margin: 8px 0 24px; }
+
+/* ---- header ---- */
+header { padding: 56px 0 40px; }
+.eyebrow { font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+header h1 { font-size: clamp(2rem, 5vw, 3rem); margin: 10px 0 14px; max-width: 18ch; }
+header .lede { font-size: 1.12rem; color: var(--ink-2); max-width: 62ch; margin: 0; }
+.links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-radius: 8px; font-weight: 600; font-size: 0.94rem;
+  text-decoration: none; border: 1px solid var(--hairline); color: var(--ink); background: var(--surface);
+}
+.btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
+.btn:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-toggle {
+  position: absolute; top: 16px; right: 16px;
+  background: var(--surface); color: var(--ink-2); border: 1px solid var(--hairline);
+  border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 0.85rem; cursor: pointer;
+}
+
+/* ---- stat tiles ---- */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+.tile .value { font-size: 2.1rem; font-weight: 700; line-height: 1.1; }
+.tile .label { color: var(--ink-2); font-size: 0.9rem; margin-top: 4px; }
+.tile .value .unit { font-size: 1rem; font-weight: 600; color: var(--muted); margin-left: 4px; }
+.tile.hero { border-color: color-mix(in srgb, var(--good) 45%, var(--hairline)); }
+.tile.hero .value { display: flex; align-items: center; gap: 10px; }
+
+/* ---- flow diagram ---- */
+.flow { display: grid; grid-template-columns: 1fr auto 1.6fr auto 1fr; align-items: stretch; gap: 10px; }
+.node { background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
+.node h3 { font-size: 0.98rem; }
+.node p { margin: 6px 0 0; color: var(--ink-2); font-size: 0.9rem; }
+.node.guard { border: 2px solid var(--accent); }
+.node.guard ol { margin: 8px 0 0; padding-left: 20px; color: var(--ink-2); font-size: 0.9rem; }
+.node.guard li + li { margin-top: 4px; }
+.arrow { align-self: center; color: var(--muted); font-size: 1.4rem; }
+
+/* ---- scenarios ---- */
+.scenarios { display: grid; gap: 18px; }
+.scenario { background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); }
+.scenario-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.scenario .attack { color: var(--ink-2); margin: 8px 0 4px; max-width: 75ch; }
+.scenario .task { color: var(--muted); font-size: 0.88rem; margin: 0 0 14px; }
+.verdict { font-weight: 600; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 6px; }
+
+.steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--grid); }
+.step { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 4px 14px; padding: 12px 0; border-bottom: 1px solid var(--grid); }
+.call { font-weight: 600; overflow-wrap: anywhere; }
+.call .mono { font-size: 0.92em; }
+.reason { color: var(--ink-2); font-size: 0.9rem; margin-top: 2px; overflow-wrap: anywhere; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip { font-size: 0.78rem; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--hairline); }
+.chip.control { color: var(--accent-ink); }
+
+.badge { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.82rem; letter-spacing: 0.02em; color: var(--ink); align-self: start; padding-top: 2px; }
+.dot { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; }
+.dot svg { width: 12px; height: 12px; }
+.dot.good { background: var(--good); }
+.dot.bad { background: var(--critical); }
+
+.checks { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 6px; }
+.checks li { display: flex; align-items: center; gap: 8px; font-size: 0.92rem; }
+
+/* ---- matrix ---- */
+.table-scroll { overflow-x: auto; border: 1px solid var(--hairline); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--grid); vertical-align: top; }
+thead th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; background: var(--surface-2); }
+tbody tr:last-child td, tbody tr:last-child th { border-bottom: 0; }
+td.hit { color: var(--ink); font-weight: 600; }
+td.miss { color: var(--muted); }
+.matrix td:not(:first-child), .matrix th:not(:first-child) { text-align: center; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---- honesty + footer ---- */
+.limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.limit { background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; padding: 16px 18px; }
+.limit p { margin: 6px 0 0; color: var(--ink-2); font-size: 0.93rem; }
+details { margin-top: 18px; }
+summary { cursor: pointer; font-weight: 600; color: var(--ink-2); }
+footer { padding: 32px 0 56px; border-top: 1px solid var(--hairline); color: var(--muted); font-size: 0.88rem; }
+footer p { margin: 4px 0; }
+.error { background: var(--surface); border: 1px solid var(--critical); border-radius: 12px; padding: 16px; }
+
+@media (max-width: 820px) {
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .flow { grid-template-columns: 1fr; }
+  .arrow { justify-self: center; transform: rotate(90deg); }
+  .limits { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .step { grid-template-columns: 1fr; }
+  .scenario { padding: 16px; }
+  header { padding-top: 64px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .btn { transition: background-color 120ms ease, border-color 120ms ease; }
+}
+</style>
+</head>
+<body>
+<button class="theme-toggle" type="button" id="themeToggle" aria-label="Toggle colour theme">Theme</button>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">AI agent security · portfolio project · Deepesh Dang</div>
+    <h1>AgentGuard: a security gate for AI coding agents</h1>
+    <p class="lede">
+      Telling an AI agent "you're read-only" in a prompt doesn't make it read-only — a poisoned file can talk it out of that.
+      AgentGuard sits between the agent and its tools and enforces policy in code the agent can't argue with.
+      Below: four scenarios run through the real proxy, with every decision taken straight from its audit log.
+    </p>
+    <div class="links">
+      <a class="btn primary" href="https://github.com/creativecoder10/agentguard">View the code on GitHub</a>
+      <a class="btn" href="https://github.com/creativecoder10/agentguard/blob/main/docs/THREAT_MODEL.md">Threat model</a>
+      <a class="btn" href="https://github.com/creativecoder10/agentguard/blob/main/docs/PRD.md">Design doc</a>
+    </div>
+  </header>
+
+  <section aria-labelledby="results-h">
+    <h2 id="results-h">Results</h2>
+    <p class="section-lede">The agent in these runs is scripted to obey every injected instruction — the worst case. The question is whether anything harmful still gets through.</p>
+    <div class="tiles" id="tiles" aria-live="polite"></div>
+  </section>
+
+  <section aria-labelledby="how-h">
+    <h2 id="how-h">How it works</h2>
+    <p class="section-lede">AgentGuard is an <abbr title="Model Context Protocol — the standard way AI agents talk to tools">MCP</abbr> proxy, so it protects any compatible agent (Claude Code, Cursor, or a custom one) without changes on the agent side.</p>
+    <div class="flow">
+      <div class="node">
+        <h3>AI agent</h3>
+        <p>Decides which tool to call. Can be wrong, or manipulated by text it reads.</p>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="node guard">
+        <h3>AgentGuard</h3>
+        <ol>
+          <li><strong>Input gate</strong> — tool allowlist, sandbox containment (checked twice), destructive actions denied, task-scoped writes.</li>
+          <li><strong>Output scan</strong> — secrets redacted and injection text fenced off before the agent sees a tool's result.</li>
+          <li><strong>Session taint</strong> — once the agent reads untrusted data, it loses the right to change anything without a human.</li>
+        </ol>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="node">
+        <h3>Tools + audit log</h3>
+        <p>Only in-policy calls run. Every decision, allowed or denied, is logged with its reason.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="scen-h">
+    <h2 id="scen-h">Scenarios</h2>
+    <p class="section-lede">Each step is one tool call the agent attempted, and what AgentGuard did with it. The checks underneath look at the real files on disk after the run.</p>
+    <div class="scenarios" id="scenarios"></div>
+  </section>
+
+  <section aria-labelledby="layers-h">
+    <h2 id="layers-h">Which defence did the work</h2>
+    <p class="section-lede">No single control stops everything. Each scenario is caught by a different layer — the point of defence in depth.</p>
+    <div class="table-scroll"><table class="matrix" id="matrix"></table></div>
+  </section>
+
+  <section aria-labelledby="limits-h">
+    <h2 id="limits-h">What this does — and doesn't — prove</h2>
+    <p class="section-lede">Stated up front, because a security claim without its limits isn't worth much.</p>
+    <div class="limits">
+      <div class="limit">
+        <h3>The boundary is the gate, not detection</h3>
+        <p>Injection detection is pattern matching, and one scenario is deliberately written to slip past it. It's a tripwire and an audit signal; what actually stops the attack is policy that holds whatever the agent believes.</p>
+      </div>
+      <div class="limit">
+        <h3>Scripted agent, real everything else</h3>
+        <p>The agent's choices are scripted so runs are repeatable and show the worst case. The proxy, the MCP protocol, the policy checks and the files on disk are all real. A live mode runs the same attack against Claude.</p>
+      </div>
+      <div class="limit">
+        <h3>Safety costs some convenience</h3>
+        <p>After reading untrusted data, even a legitimate write is blocked until a human approves — the approval prompt is the next phase. Failing closed is the deliberate trade.</p>
+      </div>
+      <div class="limit">
+        <h3>Known gap</h3>
+        <p>A payload that evades the scanner, in a file not labelled untrusted, won't taint the session. Task-scoped writes limit what that session can touch. It's written up in the threat model.</p>
+      </div>
+    </div>
+    <details>
+      <summary>Raw audit-log decisions</summary>
+      <div class="table-scroll" style="margin-top:12px"><table id="raw"></table></div>
+    </details>
+  </section>
+
+  <footer>
+    <p id="provenance">Loading run data…</p>
+    <p>Python · MCP SDK · Claude API · pytest. Regenerate this page's data with <code>cd harness &amp;&amp; python build_dashboard_data.py</code>.</p>
+  </footer>
+</div>
+
+<script>
+(() => {
+  // Theme toggle — remembered per viewer; page renders fine without storage.
+  const root = document.documentElement;
+  try { const t = localStorage.getItem("ag-theme"); if (t) root.dataset.theme = t; } catch (e) {}
+  document.getElementById("themeToggle").addEventListener("click", () => {
+    const dark = root.dataset.theme
+      ? root.dataset.theme === "dark"
+      : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("ag-theme", root.dataset.theme); } catch (e) {}
+  });
+
+  // Every value from runs.json goes in via textContent — never innerHTML —
+  // so nothing in the data (attacker-written paths included) can become markup.
+  function el(tag, props, ...children) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (k === "class") node.className = v;
+      else if (k === "text") node.textContent = v;
+      else node.setAttribute(k, v);
+    }
+    for (const c of children.flat()) if (c != null) node.append(c);
+    return node;
+  }
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  function icon(ok) {
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 12 12");
+    svg.setAttribute("aria-hidden", "true");
+    const p = document.createElementNS(SVG_NS, "path");
+    p.setAttribute("d", ok ? "M2.5 6.2 5 8.5l4.5-5" : "M3 3l6 6M9 3l-6 6");
+    p.setAttribute("stroke", "#fff");
+    p.setAttribute("stroke-width", "2");
+    p.setAttribute("fill", "none");
+    p.setAttribute("stroke-linecap", "round");
+    p.setAttribute("stroke-linejoin", "round");
+    svg.append(p);
+    return el("span", { class: "dot " + (ok ? "good" : "bad") }, svg);
+  }
+  const callLabel = (s) => `${s.tool}(${s.path ?? ""})`;
+
+  function tile(value, label, opts = {}) {
+    const v = el("div", { class: "value num" });
+    if (opts.icon) v.append(icon(true));
+    v.append(String(value));
+    if (opts.unit) v.append(el("span", { class: "unit", text: opts.unit }));
+    return el("div", { class: "tile" + (opts.hero ? " hero" : "") }, v, el("div", { class: "label", text: label }));
+  }
+
+  function render(data) {
+    const steps = data.scenarios.flatMap((s) => s.steps);
+    const denied = steps.filter((s) => s.decision === "DENY").length;
+    const checks = data.scenarios.flatMap((s) => s.checks);
+    const passed = checks.filter((c) => c.passed).length;
+    const tests = data.tests.proxy + data.tests.harness;
+
+    document.getElementById("tiles").replaceChildren(
+      tile(`${passed}/${checks.length}`, "safety checks passed on disk after the runs", { hero: true, icon: passed === checks.length }),
+      tile(denied, `harmful tool calls blocked, out of ${steps.length} attempted`),
+      tile(data.scenarios.length, "attack scenarios, including one that evades detection"),
+      tile(tests, "automated tests passing, incl. real-protocol runs"),
+    );
+
+    document.getElementById("scenarios").replaceChildren(...data.scenarios.map((sc) => {
+      const allPass = sc.checks.every((c) => c.passed);
+      const blocked = sc.steps.filter((s) => s.decision === "DENY").length;
+      const verdictText = blocked
+        ? `${blocked} harmful call${blocked > 1 ? "s" : ""} blocked`
+        : "Nothing blocked — none needed";
+      const stepNodes = sc.steps.map((st) => {
+        const ok = st.decision === "ALLOW";
+        const chips = [el("span", { class: "chip control", text: st.control })];
+        if (st.secrets_redacted.length) chips.push(el("span", { class: "chip", text: "secret redacted: " + st.secrets_redacted.join(", ") }));
+        if (st.injection_signals.length) chips.push(el("span", { class: "chip", text: "injection flagged: " + st.injection_signals.join(", ") }));
+        if (st.session_tainted) chips.push(el("span", { class: "chip", text: "session tainted from here on" }));
+        return el("li", { class: "step" },
+          el("span", { class: "badge" }, icon(ok), ok ? "ALLOWED" : "DENIED"),
+          el("div", {},
+            el("div", { class: "call" }, el("span", { class: "mono", text: callLabel(st) })),
+            el("div", { class: "reason", text: st.reason === "ok" ? "Within policy." : st.reason }),
+            el("div", { class: "chips" }, chips),
+          ),
+        );
+      });
+      const head = el("div", { class: "scenario-head" },
+        el("h3", { text: sc.title }),
+        el("span", { class: "verdict" }, icon(allPass), verdictText),
+      );
+      const taskLine = "Task given to the agent: “" + sc.task + "”" +
+        (sc.writable_paths ? ` · writes scoped to ${sc.writable_paths.join(", ")}` : "");
+      return el("article", { class: "scenario", "aria-label": sc.title },
+        head,
+        el("p", { class: "attack", text: sc.attack }),
+        el("p", { class: "task", text: taskLine }),
+        el("ol", { class: "steps" }, stepNodes),
+        el("ul", { class: "checks", "aria-label": "Checks after the run" },
+          sc.checks.map((c) => el("li", {}, icon(c.passed), c.label))),
+      );
+    }));
+
+    // Control × scenario matrix, controls in first-seen order.
+    const controls = [...new Set(steps.map((s) => s.control).filter((c) => c !== "Allowed"))];
+    const head = el("tr", {}, el("th", { scope: "col", text: "Defence" }),
+      data.scenarios.map((s) => el("th", { scope: "col", text: s.title })));
+    const rows = controls.map((ctl) => el("tr", {},
+      el("th", { scope: "row", text: ctl }),
+      data.scenarios.map((s) => {
+        const n = s.steps.filter((st) => st.control === ctl).length;
+        return el("td", { class: n ? "hit num" : "miss", text: n ? `✓ ${n}` : "—" });
+      })));
+    document.getElementById("matrix").replaceChildren(el("thead", {}, head), el("tbody", {}, rows));
+
+    const rawHead = el("tr", {}, ["Scenario", "Decision", "Tool call", "Reason"].map((h) => el("th", { scope: "col", text: h })));
+    const rawRows = data.scenarios.flatMap((s) => s.steps.map((st) => el("tr", {},
+      el("td", { text: s.title }),
+      el("td", { text: st.decision }),
+      el("td", {}, el("span", { class: "mono", text: callLabel(st) })),
+      el("td", { text: st.reason }))));
+    document.getElementById("raw").replaceChildren(el("thead", {}, rawHead), el("tbody", {}, rawRows));
+
+    const when = new Date(data.generated_at);
+    document.getElementById("provenance").textContent =
+      `Data generated ${when.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })} ` +
+      `from commit ${data.commit} · agent: ${data.model} · ${data.tests.proxy} proxy + ${data.tests.harness} harness tests.`;
+  }
+
+  fetch("runs.json", { cache: "no-cache" })
+    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    .then(render)
+    .catch((err) => {
+      const msg = el("div", { class: "error" },
+        el("strong", { text: "Couldn't load the run data. " }),
+        `(${err.message}) If you opened this file directly, serve the folder instead: `,
+        el("code", { text: "python3 -m http.server -d dashboard" }));
+      document.getElementById("tiles").replaceChildren(msg);
+      document.getElementById("provenance").textContent = "";
+    });
+})();
+</script>
+</body>
+</html>
