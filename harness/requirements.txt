@@ -1,0 +1,2 @@
+-r ../proxy/requirements.txt
+anthropic>=1.11

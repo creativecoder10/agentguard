@@ -1,8 +1,8 @@
 # PRD — AgentGuard: a policy-enforcing MCP proxy for AI coding agents
 
-**Status:** Phase 0–1 shipped. Phases 2+ not started. See [§7](#7-phase-status).
+**Status:** Phases 0, 1 and 1b shipped. Phases 2+ not started. See [§7](#7-phase-status).
 **Owner:** Deepesh Dang
-**Last updated:** 2026-10-01
+**Last updated:** 2026-10-05
 
 ## 1. Problem
 
@@ -23,7 +23,10 @@ AI coding assistant can be pointed at instead of a raw tool server. Every
 tool call passes through a deterministic policy gate — tool allowlisting,
 sandbox path containment, blocked file types, destructive-action denial —
 enforced in code the agent cannot talk its way around, with every decision
-logged. This is a portfolio-grade demonstration of applying AppSec
+logged. The gate works in both directions: what the agent *asks to do*
+(input-side policy) and what a tool *hands back* into the agent's context
+(output-side scanning — secrets redacted, prompt-injection text fenced off
+or blocked). This is a portfolio-grade demonstration of applying AppSec
 fundamentals (least privilege, defense-in-depth, never trust the
 client/prompt layer) to the agentic-AI security problem, not a production
 security product.
@@ -86,6 +89,41 @@ that file is the source of truth for granular task status.
 | Must be wireable into Claude Code with no code change on the agent side | `.mcp.json` snippet in [README.md](../README.md) — standard MCP stdio server config |
 | Not yet done | A manual session actually driving Claude Code against AgentGuard's `.mcp.json` config, screenshotted, showing a real denial in the agent's own transcript — tracked as the first item of the next phase |
 
+### 4.5 Reference agent harness & output-side scanning (Phase 1b) — **shipped**
+
+Why this phase exists: everything up to 4.4 proves the gate holds when a
+*client* sends a bad call. It doesn't show *why* an agent would send one,
+or what happens to the data flowing back. Phase 1b adds the missing half:
+a minimal agent harness that drives real Claude through AgentGuard, the
+output-side checks a harness needs, and a reproducible indirect
+prompt-injection demo.
+
+| Requirement | Decision |
+| --- | --- |
+| Show what a harness actually is, not just use one | `harness/agent.py` — a hand-written ~100-line agent loop on the Claude API (`claude-opus-5-5`): send messages + tool schemas → run each `tool_use` → append results → repeat. Deliberately not the SDK's tool runner, so every control point is visible |
+| The harness must not be the security boundary | The harness forwards every call to AgentGuard over real MCP (stdio) and makes no allow/deny decision itself — swap in Claude Code or Cursor and the same gate applies |
+| Harness control points | Hard turn ceiling (`MAX_TURNS`); never execute tool calls from a `refusal` or `max_tokens` turn (a truncated `tool_use` can carry half-written arguments); full assistant content appended unchanged; all tool results for a turn returned in one message; server-side refusal fallback enabled |
+| Tool output is untrusted input | `PolicyMiddleware._scan_result()` scans every ALLOWed result before it leaves the proxy (`app/result_guard.py`) |
+| Secrets in tool output never reach the model | Redacted to `[REDACTED:<kind>]` — AWS keys, private-key blocks, GitHub/Slack/Anthropic tokens, `PASSWORD=`-style assignments |
+| Injection text is visible as untrusted, or withheld | Pattern signals (instruction override, role reassignment, fake `system:` turns, hidden Unicode). `on_injection: flag` fences the output in `<untrusted_tool_output>` markers (an attacker-supplied closing marker is neutralised first); `on_injection: block` replaces it with an error. Hidden Unicode is stripped outright |
+| No second copy leaks | The MCP SDK returns a tool's value as both `content` and `structuredContent` — both are scanned and fenced, or the secret leaks one field over (found while building this, now covered by an integration test) |
+| Every output-side decision is auditable | `audit.log` ALLOW entries carry `findings: {secrets_redacted, injection_signals, action}` |
+| Demo reproducible by anyone, free | `harness/demo_injection.py --scripted` plays a *fully* hijacked model (no API key, no spend); `--live` runs real Claude against the same poisoned file |
+| Verified, not asserted | 12 new proxy tests (10 unit, 2 real-protocol) + 7 harness tests driving the loop over real MCP against a real AgentGuard subprocess — **30 tests total, all passing** |
+
+**Honest limit, stated up front:** injection detection is pattern matching
+and will miss a rephrased payload — the demo's own payload slipped past the
+first version of the override pattern because of a line break. It is a
+tripwire and audit signal. The security boundary is still the input-side
+gate: in the demo, a model that obeys the injection completely still can't
+delete, can't leave the sandbox, and never sees the planted key.
+
+**Known residual risk:** a hijacked agent can still *write inside the
+sandbox* (the demo's `exfil.txt` is allowed) — it just has nothing secret
+to put there. Closing that needs Phase 2 approval on writes or a
+data-flow rule ("output derived from flagged content can't be written"),
+not more patterns.
+
 ## 5. Known gap: human-in-the-loop approval
 
 Phase 1 handles the "destructive" risk tier by hard-denying every call,
@@ -105,6 +143,12 @@ runtime, not just in this doc.
   service is proxied.
 - Non-MCP pipelines (OpenAI/LangChain function-calling) — MCP first, since
   it's the interoperability layer Claude Code and Cursor already share.
+- The harness as a product — `harness/` is a reference client and demo
+  rig, not a competitor to Claude Code; real users point their own agent
+  at the proxy.
+- ML-based injection classifiers — pattern matching is enough to prove the
+  output-side control point and its audit trail; a classifier slots into
+  `result_guard.py` later without changing the middleware.
 - Packaging as an installable pip/npm artifact — current target is "clone
   and run," packaging comes once the feature set is stable enough to be
   worth versioning.
@@ -117,10 +161,11 @@ Full task-level checklist: [Plan_agentguard.md](../Plan_agentguard.md).
 | --- | --- | --- |
 | 0 — Threat model & scope | STRIDE analysis, MVP cut decided (own tools, not proxy-to-external first) | **Shipped** |
 | 1 — Core proxy | MCP server, `PolicyMiddleware`, sandbox containment (2 layers), tool allowlist, blocked extensions, destructive hard-deny, audit logging, 11 passing tests incl. 3 real-protocol integration tests | **Shipped** |
+| 1b — Reference harness & output-side scanning | Hand-written agent loop on the Claude API driving AgentGuard over MCP; tool-result secret redaction + injection flag/block; scripted + live injection demo; 30 passing tests | **Shipped** |
 | 2 — Human-in-the-loop approval | Upgrade `risk: destructive` from hard-deny to an interactive approval gate (terminal prompt for MVP) | **Not started** |
 | 3 — Monitoring & rate limiting | Simple dashboard over `audit.log`, rate limit / circuit breaker per session | **Not started** |
 | 4 — Scoped credentials | Issue short-lived, scoped credentials per tool call (e.g. AWS STS) instead of trusting a static key | **Not started** |
-| 5 — Prompt-injection test harness | Adversarial test suite proving the gate holds under a simulated injection attempt, TenantGuard-style | **Not started** |
+| 5 — Prompt-injection test harness | Adversarial test suite proving the gate holds under a simulated injection attempt, TenantGuard-style | **Not started** — first scenario (poisoned file, fully hijacked model) delivered in 1b |
 | 6 — Package as shippable product | pip/Docker packaging, config generator for `.mcp.json`/Cursor, self-scan with Semgrep/gitleaks in CI | **Not started** |
 | 7 — Broader pipeline support (stretch) | OPA/Rego policy engine; thin adapter for non-MCP (OpenAI/LangChain) tool-calling pipelines | **Not started** |
 
@@ -130,6 +175,10 @@ Full task-level checklist: [Plan_agentguard.md](../Plan_agentguard.md).
   proven by an integration test using a real client — **met**.
 - A destructive action never executes without an explicit allow — **met**
   (currently via hard-deny; Phase 2 replaces this with real approval).
+- A model that fully obeys an indirect prompt injection still can't
+  delete, escape the sandbox, or see a planted secret — **met**
+  (`harness/tests/test_agent_loop.py`, scripted hijacked model over real
+  MCP).
 - Every non-trivial design decision (middleware-vs-per-tool enforcement,
   own-tools-vs-proxy MVP cut, two-layer sandbox check) is traceable to a
   written reason — **met**, tracked in [Plan_agentguard.md](../Plan_agentguard.md).
@@ -137,6 +186,8 @@ Full task-level checklist: [Plan_agentguard.md](../Plan_agentguard.md).
 ## References
 
 - [docs/THREAT_MODEL.md](THREAT_MODEL.md) — STRIDE analysis
+- [harness/agent.py](../harness/agent.py) — reference agent harness;
+  [harness/demo_injection.py](../harness/demo_injection.py) — injection demo
 - [Plan_agentguard.md](../Plan_agentguard.md) — phased task checklist
 - [README.md](../README.md) — quick start and Claude Code wiring
 - Project origin: interview-prep discussion on agentic AI security,

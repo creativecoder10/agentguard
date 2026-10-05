@@ -17,3 +17,11 @@ blocked_extensions:
   - .pem
   - .key
   - .p12
+
+# Output-side checks on what a tool RETURNS, before the agent sees it
+# (app/result_guard.py). on_injection: "flag" fences the output as untrusted
+# data and lets it through; "block" replaces it with an error.
+result_scanning:
+  enabled: true
+  redact_secrets: true
+  on_injection: flag

@@ -19,6 +19,7 @@ from mcp.server.context import CallNext, HandlerResult, ServerMiddleware, Server
 from .audit import AuditLogger
 from .config import PolicyConfig
 from .policy import evaluate
+from .result_guard import fence_untrusted, map_strings, redact_structured, scan_text
 
 
 class PolicyMiddleware(ServerMiddleware[Any]):
@@ -49,5 +50,74 @@ class PolicyMiddleware(ServerMiddleware[Any]):
             )
 
         result = await call_next(ctx)
-        self.audit.log(tool=name, arguments=arguments, decision="ALLOW", reason=decision.reason)
+        result, findings = self._scan_result(result)
+        self.audit.log(
+            tool=name, arguments=arguments, decision="ALLOW", reason=decision.reason, findings=findings
+        )
         return result
+
+    def _scan_result(self, result: HandlerResult) -> tuple[HandlerResult, dict[str, Any] | None]:
+        """Output-side gate: redact secrets and flag/block prompt injection in
+        what the tool returned, before it reaches the agent's context.
+
+        By the time `call_next` returns, the SDK has already shaped the tool's
+        result into the JSON-RPC wire dict (`content`, `structuredContent`,
+        `isError`) — so this edits that dict, not a `CallToolResult` model.
+        """
+        scanning = self.cfg.result_scanning
+        if not scanning.enabled or not isinstance(result, dict) or "content" not in result:
+            return result, None
+
+        secrets: list[str] = []
+        signals: list[str] = []
+        content = []
+        for block in result["content"]:
+            if block.get("type") == "text":
+                scanned = scan_text(block["text"], redact=scanning.redact_secrets)
+                secrets += scanned.secrets
+                signals += scanned.injection_signals
+                block = {**block, "text": scanned.text}
+            content.append(block)
+
+        # The SDK sends a tool's return value twice — as text `content` and as
+        # `structuredContent` — so both copies get the same treatment, or the
+        # secret/injection just leaks through the second one.
+        structured = result.get("structuredContent")
+        if structured is not None:
+            structured, s, i = redact_structured(structured, redact=scanning.redact_secrets)
+            secrets += s
+            signals += i
+
+        secrets = sorted(set(secrets))
+        signals = sorted(set(signals))
+        if not secrets and not signals:
+            return result, None
+
+        findings: dict[str, Any] = {"secrets_redacted": secrets, "injection_signals": signals}
+        if signals and scanning.on_injection == "block":
+            findings["action"] = "blocked"
+            blocked = CallToolResult(
+                content=[
+                    TextContent(
+                        type="text",
+                        text="BLOCKED by AgentGuard: tool output matched prompt-injection patterns "
+                        f"({', '.join(signals)}) and was withheld from the agent.",
+                    )
+                ],
+                isError=True,
+            )
+            return blocked, findings
+
+        if signals:
+            findings["action"] = "flagged"
+            content = [
+                {**b, "text": fence_untrusted(b["text"], signals)} if b.get("type") == "text" else b for b in content
+            ]
+            structured = map_strings(structured, lambda text: fence_untrusted(text, signals))
+        else:
+            findings["action"] = "redacted"
+
+        scanned_result = {**result, "content": content}
+        if structured is not None:
+            scanned_result["structuredContent"] = structured
+        return scanned_result, findings

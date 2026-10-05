@@ -18,7 +18,15 @@ class AuditLogger:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
-    def log(self, *, tool: str, arguments: dict[str, Any], decision: str, reason: str) -> None:
+    def log(
+        self,
+        *,
+        tool: str,
+        arguments: dict[str, Any],
+        decision: str,
+        reason: str,
+        findings: dict[str, Any] | None = None,
+    ) -> None:
         entry = {
             "ts": time.time(),
             "tool": tool,
@@ -26,5 +34,9 @@ class AuditLogger:
             "decision": decision,  # "ALLOW" | "DENY"
             "reason": reason,
         }
+        if findings:
+            # Output-side scan results (redacted secrets, injection signals)
+            # — see app/result_guard.py.
+            entry["findings"] = findings
         with self.path.open("a") as f:
             f.write(json.dumps(entry) + "\n")

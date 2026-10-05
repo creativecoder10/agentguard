@@ -8,6 +8,7 @@ annotation ceremony.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel
@@ -17,10 +18,20 @@ class ToolPolicy(BaseModel):
     risk: str  # "read" | "write" | "destructive"
 
 
+class ResultScanningPolicy(BaseModel):
+    """What happens to a tool's *output* before the agent sees it — see
+    app/result_guard.py."""
+
+    enabled: bool = True
+    redact_secrets: bool = True
+    on_injection: Literal["flag", "block"] = "flag"
+
+
 class PolicyConfig(BaseModel):
     sandbox_root: Path
     tools: dict[str, ToolPolicy]
     blocked_extensions: list[str] = []
+    result_scanning: ResultScanningPolicy = ResultScanningPolicy()
 
 
 def load_policy(path: str | Path) -> PolicyConfig:
