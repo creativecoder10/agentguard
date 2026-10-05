@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AgentGuard Attack Report</title>
-<meta name="description" content="AgentGuard — a security gate for AI coding agents. Four attack scenarios run through the real proxy, every decision from its audit log.">
+<meta name="description" content="AgentGuard — a security gate for AI coding agents. Three attacks and a clean baseline run through the real proxy, every decision from its audit log.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 4 7v8c0 7.5 5.1 13.4 12 15 6.9-1.6 12-7.5 12-15V7z' fill='%232a78d6'/><path d='m10.5 16 4 4 7-8' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 <style>
 :root {
@@ -194,7 +194,7 @@ footer p { margin: 4px 0; }
     <p class="lede">
       Telling an AI agent "you're read-only" in a prompt doesn't make it read-only — a poisoned file can talk it out of that.
       AgentGuard sits between the agent and its tools and enforces policy in code the agent can't argue with.
-      Below: four scenarios run through the real proxy, with every decision taken straight from its audit log.
+      Below: three attacks and one normal task, run through the real proxy, with every decision taken straight from its audit log.
     </p>
     <div class="links">
       <a class="btn primary" href="https://github.com/creativecoder10/agentguard">View the code on GitHub</a>
@@ -242,7 +242,7 @@ footer p { margin: 4px 0; }
 
   <section aria-labelledby="layers-h">
     <h2 id="layers-h">Which defence did the work</h2>
-    <p class="section-lede">No single control stops everything. Each scenario is caught by a different layer — the point of defence in depth.</p>
+    <p class="section-lede">No single control stops everything. Each attack is caught by a different layer — the point of defence in depth — and the baseline column stays empty.</p>
     <div class="table-scroll"><table class="matrix" id="matrix"></table></div>
   </section>
 
@@ -335,11 +335,13 @@ footer p { margin: 4px 0; }
     const checks = data.scenarios.flatMap((s) => s.checks);
     const passed = checks.filter((c) => c.passed).length;
     const tests = data.tests.proxy + data.tests.harness;
+    const attacks = data.scenarios.filter((s) => s.kind === "attack").length;
+    const baselines = data.scenarios.length - attacks;
 
     document.getElementById("tiles").replaceChildren(
       tile(`${passed}/${checks.length}`, "safety checks passed on disk after the runs", { hero: true, icon: passed === checks.length }),
       tile(denied, `harmful tool calls blocked, out of ${steps.length} attempted`),
-      tile(data.scenarios.length, "attack scenarios, including one that evades detection"),
+      tile(attacks, `attack scenarios (one evades detection) + ${baselines} clean baseline`),
       tile(tests, "automated tests passing, incl. real-protocol runs"),
     );
 
