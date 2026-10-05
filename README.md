@@ -11,6 +11,10 @@ the only thing that does is a control underneath the prompt that the agent
 can't talk its way around. AgentGuard is that control, built as something
 you can actually run.
 
+**▶ [Live attack report](https://agentguard-dashboard-three.vercel.app/)** —
+three prompt-injection attacks and a clean baseline, run through the real
+proxy; every step on the page is a real audit-log entry.
+
 ## Status
 
 Phase 1 (core proxy + tool allowlist + sandbox containment) — **shipped**.
