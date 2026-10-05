@@ -56,6 +56,11 @@ POLICY = textwrap.dedent(
       enabled: true
       redact_secrets: true
       on_injection: flag
+    taint:
+      enabled: true
+      untrusted_sources: ["inbox/*"]
+      on_injection_signal: true
+      blocks_risk: [write, destructive]
     """
 )
 

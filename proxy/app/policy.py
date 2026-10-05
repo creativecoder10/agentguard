@@ -8,6 +8,7 @@ call a tool, only *what* it's asking to do and whether that's in-policy.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from pathlib import Path
 
 from .config import PolicyConfig
@@ -35,6 +36,17 @@ def _resolve_within_sandbox(raw_path: str, sandbox_root: Path) -> Path | None:
     return candidate
 
 
+def sandbox_relative(raw_path: str, sandbox_root: Path) -> str | None:
+    """The sandbox-relative POSIX path a raw argument resolves to, or None
+    if it escapes the sandbox — what writable_paths/untrusted_sources match on."""
+    resolved = _resolve_within_sandbox(raw_path, sandbox_root)
+    return None if resolved is None else resolved.relative_to(sandbox_root).as_posix()
+
+
+def matches_any(relative_path: str, globs: list[str]) -> bool:
+    return any(fnmatch(relative_path, g) for g in globs)
+
+
 def evaluate(tool_name: str, arguments: dict, cfg: PolicyConfig) -> PolicyDecision:
     tool_policy = cfg.tools.get(tool_name)
     if tool_policy is None:
@@ -60,5 +72,10 @@ def evaluate(tool_name: str, arguments: dict, cfg: PolicyConfig) -> PolicyDecisi
 
     if resolved.suffix in cfg.blocked_extensions:
         return PolicyDecision(False, f"extension '{resolved.suffix}' is blocked")
+
+    if tool_policy.risk == "write" and cfg.writable_paths is not None:
+        relative = resolved.relative_to(cfg.sandbox_root).as_posix()
+        if not matches_any(relative, cfg.writable_paths):
+            return PolicyDecision(False, f"path '{relative}' is outside this task's writable_paths")
 
     return PolicyDecision(True, "ok")

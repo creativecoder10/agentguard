@@ -26,6 +26,10 @@ POLICY_PATH = Path(os.environ.get("AGENTGUARD_POLICY_PATH", PROXY_ROOT / "policy
 AUDIT_PATH = Path(os.environ.get("AGENTGUARD_AUDIT_PATH", PROXY_ROOT / "audit.log"))
 
 cfg = load_policy(POLICY_PATH)
+# Per-task write scope from whoever launches the proxy (e.g. the harness):
+# AGENTGUARD_WRITABLE_PATHS="summary.md,notes/*" overrides policy.yaml.
+if os.environ.get("AGENTGUARD_WRITABLE_PATHS"):
+    cfg.writable_paths = [p.strip() for p in os.environ["AGENTGUARD_WRITABLE_PATHS"].split(",") if p.strip()]
 audit = AuditLogger(AUDIT_PATH)
 
 mcp_app = MCPServer(

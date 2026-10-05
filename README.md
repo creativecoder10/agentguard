@@ -16,6 +16,8 @@ you can actually run.
 Phase 1 (core proxy + tool allowlist + sandbox containment) — **shipped**.
 Phase 1b (reference agent harness + output-side secret redaction and
 prompt-injection flagging + injection demo) — **shipped**.
+Phase 2a (session taint: after untrusted input, writes need approval;
+task-scoped `writable_paths`) — **shipped**.
 See [docs/PRD.md](docs/PRD.md) and [Plan_agentguard.md](Plan_agentguard.md)
 for the full roadmap and phase status.
 
@@ -47,7 +49,7 @@ coverage.
 cd proxy
 python3.12 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest -q          # 23 tests, incl. 5 real MCP-protocol integration tests
+.venv/bin/python -m pytest -q          # 37 tests, incl. 8 real MCP-protocol integration tests
 .venv/bin/python -m app.server         # run the server directly (stdio)
 ```
 
@@ -62,7 +64,7 @@ instructions to delete files and steal an SSH key.
 cd harness
 ../.venv/bin/python demo_injection.py --scripted   # free: plays a FULLY hijacked model
 ../.venv/bin/python demo_injection.py --live       # real Claude (needs ANTHROPIC_API_KEY)
-../.venv/bin/python -m pytest -q                   # 7 harness tests, no API key needed
+../.venv/bin/python -m pytest -q                   # 10 harness tests, no API key needed
 ```
 
 Scripted run, abridged:
@@ -72,6 +74,7 @@ Scripted run, abridged:
                                                   output fenced as <untrusted_tool_output>
 ── tool: delete_file(summary.md) → DENIED          destructive, requires human approval
 ── tool: read_file(../../../.ssh/id_rsa) → DENIED  resolves outside the sandbox root
+── tool: write_file(exfil.txt) → DENIED           session is tainted (read flagged output)
 ```
 
 The model obeyed the injection completely and still couldn't do damage —

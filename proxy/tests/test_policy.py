@@ -75,3 +75,20 @@ def test_denies_missing_path_argument(cfg: PolicyConfig) -> None:
 def test_allows_write_within_nested_sandbox_dir(cfg: PolicyConfig) -> None:
     decision = evaluate("write_file", {"path": "notes/todo.txt", "content": "x"}, cfg)
     assert decision.allowed
+
+
+def test_writable_paths_allows_matching_write(cfg: PolicyConfig) -> None:
+    cfg.writable_paths = ["summary.md", "out/*"]
+    assert evaluate("write_file", {"path": "out/report.md", "content": "x"}, cfg).allowed
+
+
+def test_writable_paths_denies_other_writes(cfg: PolicyConfig) -> None:
+    cfg.writable_paths = ["summary.md"]
+    decision = evaluate("write_file", {"path": "src/auth.ts", "content": "x"}, cfg)
+    assert not decision.allowed
+    assert "writable_paths" in decision.reason
+
+
+def test_writable_paths_does_not_restrict_reads(cfg: PolicyConfig) -> None:
+    cfg.writable_paths = ["summary.md"]
+    assert evaluate("read_file", {"path": "anything.txt"}, cfg).allowed

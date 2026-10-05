@@ -25,3 +25,21 @@ result_scanning:
   enabled: true
   redact_secrets: true
   on_injection: flag
+
+# Optional task-scoped write allowlist (globs relative to sandbox_root).
+# Absent = any path inside the sandbox. A launcher can set it per task with
+# AGENTGUARD_WRITABLE_PATHS="summary.md,notes/*".
+# writable_paths: ["summary.md"]
+
+# Session taint (app/taint.py): once the session reads untrusted data, tools
+# whose risk is in blocks_risk are denied until a human approves (Phase 2).
+# untrusted_sources taints by WHERE data came from — holds even when the
+# injection scanner misses the payload. on_injection_signal also taints
+# when result_scanning flags a tool's output.
+taint:
+  enabled: true
+  untrusted_sources:
+    - "inbox/*"
+    - "downloads/*"
+  on_injection_signal: true
+  blocks_risk: [write, destructive]

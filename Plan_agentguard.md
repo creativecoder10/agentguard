@@ -147,12 +147,37 @@ flowchart LR
     not the boundary
 - [ ] Run `demo_injection.py --live` against real Claude and capture the
       transcript for the README (needs API credentials; a few cents)
-- [ ] Residual risk to close later: a hijacked agent can still write inside
-      the sandbox (`exfil.txt`) — needs Phase 2 approval on writes or a
-      "don't write content derived from flagged output" rule
+- [x] Residual risk found: a hijacked agent could still write inside the
+      sandbox (`exfil.txt`) — closed in Phase 2a below
 
-## Phase 2 — Human-in-the-loop approval — not started
+## Phase 2a — Session taint & task-scoped writes — done
 
+Detection can't stop a hijacked agent's *in-policy* actions, so this
+narrows what a session may do once it has seen untrusted data, instead
+of trying harder to recognise bad data (Meta's "Agents Rule of Two").
+
+- [x] `proxy/app/taint.py` — `SessionTaint` (sticky, first reason kept),
+      `taint_reason()` (by source glob or by injection signal),
+      `check_taint()` (deny `blocks_risk` tools once tainted)
+- [x] `PolicyMiddleware` — taint check after `evaluate()`, taint update
+      after the output scan; tainting call logs `findings.session_tainted`
+- [x] `policy.yaml` — `taint:` block (`untrusted_sources`, defaults
+      `inbox/*`, `downloads/*`) and optional `writable_paths`
+- [x] `AGENTGUARD_WRITABLE_PATHS` env override; harness
+      `server_params(writable_paths=...)` sets the scope per task
+- [x] Tests — 8 taint unit, 3 `writable_paths` unit, 3 real-protocol
+      (flagged read locks writes; **scanner-evading payload from an
+      untrusted source still locks writes**; per-task scope blocks
+      `src/auth.ts`), 3 harness — **47 total, all passing**
+- [x] Demo: the hijacked model's `exfil.txt` write is now DENIED; sandbox
+      unchanged after the run
+- Trade-offs recorded in PRD §4.6: a tainted session's legitimate write is
+  blocked too (until 2b), and source taint is only as good as the labels
+
+## Phase 2b — Human-in-the-loop approval — not started
+
+- [ ] Same approval path for tainted-session writes (Phase 2a currently
+      hard-denies them)
 - [ ] Replace `risk: destructive` hard-deny with a real approval path:
       block on a terminal prompt (`y/n`) before `call_next(ctx)` runs
 - [ ] Decide the timeout/default behavior if no one answers (deny-by-default

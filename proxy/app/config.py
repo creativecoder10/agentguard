@@ -27,11 +27,28 @@ class ResultScanningPolicy(BaseModel):
     on_injection: Literal["flag", "block"] = "flag"
 
 
+class TaintPolicy(BaseModel):
+    """Session taint tracking — see app/taint.py. Once a session has read
+    untrusted data, tools in `blocks_risk` stop running without approval."""
+
+    enabled: bool = True
+    # fnmatch-style globs, relative to sandbox_root ("*" also crosses "/").
+    # Reading a matching path taints the session whatever the scanner says.
+    untrusted_sources: list[str] = []
+    on_injection_signal: bool = True
+    blocks_risk: list[str] = ["write", "destructive"]
+
+
 class PolicyConfig(BaseModel):
     sandbox_root: Path
     tools: dict[str, ToolPolicy]
     blocked_extensions: list[str] = []
+    # Task-scoped write allowlist (globs, relative to sandbox_root). None =
+    # any path inside the sandbox; set per task to shrink what a hijacked
+    # agent could touch even before anything is tainted.
+    writable_paths: list[str] | None = None
     result_scanning: ResultScanningPolicy = ResultScanningPolicy()
+    taint: TaintPolicy = TaintPolicy()
 
 
 def load_policy(path: str | Path) -> PolicyConfig:

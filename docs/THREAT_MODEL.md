@@ -50,13 +50,24 @@ This mirrors the actual defense-in-depth principle, not just the name of
 it: two independent layers, either of which alone would already stop the
 traversal attack above.
 
-## Residual risk after Phase 1b
+## Hijacked agent doing *in-policy* things (found in 1b, closed in 2a)
 
-A fully hijacked agent can still perform *in-policy* actions on the
-attacker's behalf — e.g. write a file inside the sandbox. Redaction means
-it has no secret to put there, but the action itself is allowed. Fixing
-that is a policy question (approval on writes, Phase 2) not a detection
-question.
+After Phase 1b a fully hijacked agent could still perform in-policy
+actions for the attacker — e.g. write a file inside the sandbox, or edit
+code the user will later run (an **integrity** risk more than a leak).
+Phase 2a treats this as a policy problem, not a detection problem:
+
+| Control | Effect | Test |
+| --- | --- | --- |
+| Session taint by source | reading an `untrusted_sources` path locks write/destructive tools for the rest of the session, whatever the content says | `test_untrusted_source_taints_even_when_scanner_sees_nothing` |
+| Session taint by signal | a flagged injection does the same | `test_flagged_read_taints_session_and_blocks_later_writes` |
+| Task-scoped writes | `writable_paths` limits writes to what the task should produce | `test_writable_paths_env_scopes_writes_to_the_task` |
+
+**Still residual:** a scanner-evading payload in a file *not* labelled
+untrusted doesn't taint the session — `writable_paths` bounds what that
+session can write, and Phase 2b approval is the eventual answer. The agent
+can also still give the *user* a misleading answer; that's outside what a
+tool gate can see.
 
 ## Out of scope for Phase 1
 

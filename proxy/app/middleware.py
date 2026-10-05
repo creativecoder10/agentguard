@@ -20,6 +20,7 @@ from .audit import AuditLogger
 from .config import PolicyConfig
 from .policy import evaluate
 from .result_guard import fence_untrusted, map_strings, redact_structured, scan_text
+from .taint import SessionTaint, check_taint, taint_reason
 
 
 class PolicyMiddleware(ServerMiddleware[Any]):
@@ -30,6 +31,11 @@ class PolicyMiddleware(ServerMiddleware[Any]):
     def __init__(self, cfg: PolicyConfig, audit: AuditLogger) -> None:
         self.cfg = cfg
         self.audit = audit
+        # One middleware instance per server process, and over stdio one
+        # process serves exactly one client session — so instance state *is*
+        # session state. An HTTP transport serving many sessions would need
+        # this keyed by session id instead.
+        self.taint = SessionTaint()
 
     async def __call__(
         self, ctx: ServerRequestContext[Any, Any], call_next: CallNext
@@ -41,6 +47,8 @@ class PolicyMiddleware(ServerMiddleware[Any]):
         arguments = ctx.params.get("arguments") or {}
 
         decision = evaluate(name, arguments, self.cfg)
+        if decision.allowed:
+            decision = check_taint(name, self.taint, self.cfg) or decision
 
         if not decision.allowed:
             self.audit.log(tool=name, arguments=arguments, decision="DENY", reason=decision.reason)
@@ -51,6 +59,9 @@ class PolicyMiddleware(ServerMiddleware[Any]):
 
         result = await call_next(ctx)
         result, findings = self._scan_result(result)
+        reason = taint_reason(name, arguments, findings, self.cfg)
+        if reason and self.taint.mark(reason):
+            findings = {**(findings or {}), "session_tainted": reason}
         self.audit.log(
             tool=name, arguments=arguments, decision="ALLOW", reason=decision.reason, findings=findings
         )

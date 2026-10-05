@@ -1,8 +1,8 @@
 # PRD — AgentGuard: a policy-enforcing MCP proxy for AI coding agents
 
-**Status:** Phases 0, 1 and 1b shipped. Phases 2+ not started. See [§7](#7-phase-status).
+**Status:** Phases 0, 1, 1b and 2a shipped. Phase 2b (approval flow) and later not started. See [§7](#7-phase-status).
 **Owner:** Deepesh Dang
-**Last updated:** 2026-10-05
+**Last updated:** 2026-10-05 (2a)
 
 ## 1. Problem
 
@@ -118,11 +118,29 @@ tripwire and audit signal. The security boundary is still the input-side
 gate: in the demo, a model that obeys the injection completely still can't
 delete, can't leave the sandbox, and never sees the planted key.
 
-**Known residual risk:** a hijacked agent can still *write inside the
-sandbox* (the demo's `exfil.txt` is allowed) — it just has nothing secret
-to put there. Closing that needs Phase 2 approval on writes or a
-data-flow rule ("output derived from flagged content can't be written"),
-not more patterns.
+**Residual risk found here, closed in 2a (§4.6):** a hijacked agent could
+still make *in-policy* calls for the attacker — the demo's `exfil.txt`
+write inside the sandbox was allowed.
+
+### 4.6 Session taint & task-scoped writes (Phase 2a) — **shipped**
+
+| Requirement | Decision |
+| --- | --- |
+| After untrusted input, state changes need a human | `app/taint.py` — a session is tainted by its first untrusted read; from then on tools whose risk is in `taint.blocks_risk` (default `write`, `destructive`) are denied with the taint reason, until the Phase 2b approval flow can turn that into a prompt. Taint is sticky: untrusted text never leaves the model's context, so the restriction doesn't either |
+| Must hold when detection misses | Taint by **source**: reading a path matching `taint.untrusted_sources` taints regardless of content. Taint by **signal** (result_guard flagged the output) is an extra trigger, not the only one. Tested with a payload written to evade every pattern |
+| Shrink what an agent can touch before anything goes wrong | `writable_paths` — task-scoped write allowlist; the launcher sets it per task (`AGENTGUARD_WRITABLE_PATHS`, or `server_params(writable_paths=...)` in the harness) |
+| Session = process | Over stdio one proxy process serves one client, so taint lives on the middleware instance. An HTTP transport would need it keyed by session id — noted in code |
+| Auditable | the call that taints the session logs `findings.session_tainted`; every later denial carries the reason |
+| Verified | 14 new proxy tests (8 taint unit, 3 writable_paths unit, 3 real-protocol) + 3 harness tests — **47 tests total, all passing** |
+
+**Trade-offs, stated honestly:**
+- *Usability:* a tainted session also can't make its **legitimate** write
+  (e.g. `summary.md` after reading poisoned notes). That's the price of
+  failing closed until Phase 2b approval exists.
+- *Coverage:* taint-by-source is only as good as the source labels. A
+  scanner-evading payload in a path *not* marked untrusted still doesn't
+  taint — `writable_paths` is the backstop that limits what such a session
+  can write.
 
 ## 5. Known gap: human-in-the-loop approval
 
@@ -162,7 +180,8 @@ Full task-level checklist: [Plan_agentguard.md](../Plan_agentguard.md).
 | 0 — Threat model & scope | STRIDE analysis, MVP cut decided (own tools, not proxy-to-external first) | **Shipped** |
 | 1 — Core proxy | MCP server, `PolicyMiddleware`, sandbox containment (2 layers), tool allowlist, blocked extensions, destructive hard-deny, audit logging, 11 passing tests incl. 3 real-protocol integration tests | **Shipped** |
 | 1b — Reference harness & output-side scanning | Hand-written agent loop on the Claude API driving AgentGuard over MCP; tool-result secret redaction + injection flag/block; scripted + live injection demo; 30 passing tests | **Shipped** |
-| 2 — Human-in-the-loop approval | Upgrade `risk: destructive` from hard-deny to an interactive approval gate (terminal prompt for MVP) | **Not started** |
+| 2a — Session taint & task-scoped writes | Untrusted read (by source or injection signal) taints the session → write/destructive denied; per-task `writable_paths` | **Shipped** |
+| 2b — Human-in-the-loop approval | Turn the hard denies (destructive, tainted-session writes) into an interactive approval gate (terminal prompt for MVP) | **Not started** |
 | 3 — Monitoring & rate limiting | Simple dashboard over `audit.log`, rate limit / circuit breaker per session | **Not started** |
 | 4 — Scoped credentials | Issue short-lived, scoped credentials per tool call (e.g. AWS STS) instead of trusting a static key | **Not started** |
 | 5 — Prompt-injection test harness | Adversarial test suite proving the gate holds under a simulated injection attempt, TenantGuard-style | **Not started** — first scenario (poisoned file, fully hijacked model) delivered in 1b |
@@ -179,6 +198,10 @@ Full task-level checklist: [Plan_agentguard.md](../Plan_agentguard.md).
   delete, escape the sandbox, or see a planted secret — **met**
   (`harness/tests/test_agent_loop.py`, scripted hijacked model over real
   MCP).
+- After reading untrusted data — including a payload the scanner misses —
+  a session can't change anything without approval — **met**
+  (`test_untrusted_source_taints_even_when_scanner_sees_nothing`,
+  `test_scanner_evading_payload_from_untrusted_source_still_locks_writes`).
 - Every non-trivial design decision (middleware-vs-per-tool enforcement,
   own-tools-vs-proxy MVP cut, two-layer sandbox check) is traceable to a
   written reason — **met**, tracked in [Plan_agentguard.md](../Plan_agentguard.md).

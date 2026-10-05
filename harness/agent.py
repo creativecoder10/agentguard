@@ -56,9 +56,20 @@ class AgentRun:
     steps: list[ToolStep] = field(default_factory=list)
 
 
-def server_params(policy_path: Path | None = None, audit_path: Path | None = None) -> StdioServerParameters:
-    """How to spawn AgentGuard as an MCP server subprocess (stdio transport)."""
+def server_params(
+    policy_path: Path | None = None,
+    audit_path: Path | None = None,
+    writable_paths: list[str] | None = None,
+) -> StdioServerParameters:
+    """How to spawn AgentGuard as an MCP server subprocess (stdio transport).
+
+    `writable_paths` scopes writes to this task: the harness knows what the
+    task should produce ("summarise into summary.md"), so it can tell the
+    proxy before the agent has read a single byte of untrusted input.
+    """
     env = dict(os.environ)
+    if writable_paths:
+        env["AGENTGUARD_WRITABLE_PATHS"] = ",".join(writable_paths)
     if policy_path:
         env["AGENTGUARD_POLICY_PATH"] = str(policy_path)
     if audit_path:
