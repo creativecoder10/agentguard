@@ -91,7 +91,7 @@ cd harness && ../.venv/bin/python build_dashboard_data.py   # re-run scenarios â
 python3 -m http.server -d dashboard                          # preview at http://localhost:8000
 ```
 
-Deploy on Vercel: import the repo, set **Root Directory** to `dashboard`,
+Live at **https://agentguard-dashboard-three.vercel.app/**. To deploy your own copy on Vercel: import the repo, set **Root Directory** to `dashboard`,
 Framework Preset **Other**, no build command. It's plain HTML + one JSON file.
 
 ## Wiring into Claude Code
